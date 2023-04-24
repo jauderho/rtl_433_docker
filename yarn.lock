@@ -27,9 +27,9 @@ node-fetch@^3.3.1:
     fetch-blob "^3.1.4"
     formdata-polyfill "^4.0.10"
 
-prettier@^2.8.4:
-  version "2.8.4"
-  resolved "https://registry.yarnpkg.com/prettier/-/prettier-2.8.4.tgz#34dd2595629bfbb79d344ac4a91ff948694463c3"
+prettier@^2.8.8:
+  version "2.8.8"
+  resolved "https://registry.yarnpkg.com/prettier/-/prettier-2.8.8.tgz#e8c5d7e98a4305ffe3de2e1fc4aca1a71c28b1da"
 
 web-streams-polyfill@^3.0.3:
   version "3.2.1"
