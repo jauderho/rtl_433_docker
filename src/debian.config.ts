@@ -4,21 +4,22 @@ import { sortRtl433TagsDesc } from "./utils.ts";
 const fetchLastDebianCycleCodenames = async () => {
   const res = await fetch("https://endoflife.date/api/debian.json");
 
-  const cycles = await res.json() as (Array<{
-    "cycle": string;
-    "codename": string;
-    "releaseDate": string;
-    "eol": string;
-    "extendedSupport": string;
-    "link": string;
-    "latest": string;
-    "latestReleaseDate": string;
-    "lts": boolean;
-  }>);
+  const cycles = (await res.json()) as Array<{
+    cycle: string;
+    codename: string;
+    releaseDate: string;
+    eol: string;
+    extendedSupport: string;
+    link: string;
+    latest: string;
+    latestReleaseDate: string;
+    lts: boolean;
+  }>;
 
-  return cycles.slice(0, 2).map((cycles) =>
-    cycles.codename.toLocaleLowerCase()
-  );
+  return cycles
+    .slice(0, 2)
+    .map((cycles) => cycles.codename.toLocaleLowerCase())
+    .slice(0, 1);
 };
 
 const DEBIAN_VERSIONS = await fetchLastDebianCycleCodenames();
@@ -29,22 +30,16 @@ const BROKEN_RTLVERSIONS_FOR_DEBIAN_CYCLES = new Map([
 ]);
 
 const generateTags = (baseVersion: string, gitRef: string) => {
-  const tags = [
-    `${gitRef}-debian-${baseVersion}`,
-  ];
+  const tags = [`${gitRef}-debian-${baseVersion}`];
 
   if (baseVersion === "latest") {
-    tags.push(...[
-      `${gitRef}-debian`,
-    ]);
+    tags.push(...[`${gitRef}-debian`]);
   }
 
   return tags;
 };
 
-export const createDebianBuildTasks = (
-  gitRefs: string[],
-): BuildTask[] => {
+export const createDebianBuildTasks = (gitRefs: string[]): BuildTask[] => {
   const [latestGitRef] = sortRtl433TagsDesc(gitRefs);
 
   const variants = gitRefs.flatMap((gitRef) =>
@@ -60,19 +55,17 @@ export const createDebianBuildTasks = (
     })
   );
 
-  const tasks: BuildTask[] = variants.filter(
-    ({ gitRef, debianVersion }) => {
+  const tasks: BuildTask[] = variants
+    .filter(({ gitRef, debianVersion }) => {
       if (BROKEN_RTLVERSIONS_FOR_DEBIAN_CYCLES.has(debianVersion)) {
-        const brokenRefs = BROKEN_RTLVERSIONS_FOR_DEBIAN_CYCLES.get(
-          debianVersion,
-        )!;
+        const brokenRefs =
+          BROKEN_RTLVERSIONS_FOR_DEBIAN_CYCLES.get(debianVersion)!;
         return !brokenRefs.includes(gitRef);
       }
 
       return true;
-    },
-  ).map(
-    ({ gitRef, debianVersion, isLatestGitRef, isLatestBase }) => {
+    })
+    .map(({ gitRef, debianVersion, isLatestGitRef, isLatestBase }) => {
       const tags = generateTags(debianVersion, gitRef);
 
       if (isLatestBase) {
@@ -88,7 +81,7 @@ export const createDebianBuildTasks = (
       }
 
       return {
-        name: `debian-${debianVersion}-${gitRef}`,
+        name: `${gitRef}-debian-${debianVersion}`,
         gitRef: gitRef,
         context: "./images/debian/build-context",
         file: "./images/debian/build-context/Dockerfile",
@@ -108,8 +101,7 @@ export const createDebianBuildTasks = (
         cacheFrom: `type=gha,scope=debian-${debianVersion}-${gitRef}`,
         cacheTo: `type=gha,scope=debian-${debianVersion}-${gitRef}`,
       };
-    },
-  );
+    });
 
   return tasks;
 };
