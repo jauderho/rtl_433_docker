@@ -27,6 +27,7 @@ const DEBIAN_LATEST_VERSION = DEBIAN_VERSIONS[0];
 
 const BROKEN_RTLVERSIONS_FOR_DEBIAN_CYCLES = new Map([
   ["bookworm", ["19.08", "18.12"]],
+  ["trixie", ["18.12"]],
 ]);
 
 const generateTags = (baseVersion: string, gitRef: string) => {
@@ -39,7 +40,10 @@ const generateTags = (baseVersion: string, gitRef: string) => {
   return tags;
 };
 
-export const createDebianBuildTasks = (gitRefs: string[]): BuildTask[] => {
+export const createDebianBuildTasks = (
+  gitRefs: string[],
+  gitRefShas: Map<string, string>
+): BuildTask[] => {
   const [latestGitRef] = sortRtl433TagsDesc(gitRefs);
 
   const variants = gitRefs.flatMap((gitRef) =>
@@ -80,6 +84,8 @@ export const createDebianBuildTasks = (gitRefs: string[]): BuildTask[] => {
         tags.push(...generateTags("latest", "latest"));
       }
 
+      const gitSha = gitRefShas.get(gitRef) ?? "unknown";
+
       return {
         name: `${gitRef}-debian-${debianVersion}`,
         gitRef: gitRef,
@@ -88,15 +94,13 @@ export const createDebianBuildTasks = (gitRefs: string[]): BuildTask[] => {
         tags,
         buildArgs: {
           rtl433GitVersion: gitRef,
+          rtl433GitSha: gitSha,
           debianVersion: debianVersion,
         },
         platforms: [
           "linux/amd64",
-          "linux/arm/v7",
           "linux/arm64/v8",
-          "linux/mips64le",
-          "linux/ppc64le",
-          "linux/s390x",
+          "linux/arm/v7",
         ],
         cacheFrom: `type=gha,scope=debian-${debianVersion}-${gitRef}`,
         cacheTo: `type=gha,scope=debian-${debianVersion}-${gitRef}`,
