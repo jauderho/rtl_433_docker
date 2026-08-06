@@ -3,12 +3,3 @@
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
-
-node_modules/
-
-# Ignore Yarn 2 files including Zero-Installs
-.yarn/*
-!.yarn/releases
-!.yarn/plugins
-!.yarn/sdks
-!.yarn/versions
