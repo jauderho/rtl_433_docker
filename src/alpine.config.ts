@@ -1,26 +1,17 @@
-import { BuildTask } from "./main.ts";
-import { semMajor, semMinor, sortRtl433TagsDesc } from "./utils.ts";
+import type { BuildTask } from "./main.ts";
+import { fetchJson, semMajor, semMinor, sortRtl433TagsDesc } from "./utils.ts";
 
-const fetchLastAlpineCycleVersions = async () => {
-  const res = await fetch("https://endoflife.date/api/alpine.json");
+/**
+ * The Alpine base versions to build against, newest first. Kept out of module
+ * scope so importing this module performs no network IO.
+ */
+export const fetchAlpineVersions = async (): Promise<string[]> => {
+  const cycles = await fetchJson<Array<{ latest: string }>>(
+    "https://endoflife.date/api/alpine-linux.json"
+  );
 
-  const cycles = (await res.json()) as Array<{
-    cycle: string;
-    releaseDate: string;
-    eol: string;
-    latest: string;
-    latestReleaseDate: string;
-    lts: boolean;
-  }>;
-
-  return cycles
-    .slice(0, 2)
-    .map((cycles) => cycles.latest)
-    .slice(0, 1);
+  return cycles.slice(0, 1).map((cycle) => cycle.latest);
 };
-
-const ALPINE_VERSIONS = await fetchLastAlpineCycleVersions();
-const ALPINE_LATEST_VERSION = ALPINE_VERSIONS[0];
 
 const generateTags = (baseVersion: string, gitRef: string) => {
   const tags = [`${gitRef}-alpine-${baseVersion}`];
@@ -43,14 +34,16 @@ const generateTags = (baseVersion: string, gitRef: string) => {
 
 export const createAlpineBuildTasks = (
   gitRefs: string[],
-  gitRefShas: Map<string, string>
+  gitRefShas: Map<string, string>,
+  alpineVersions: string[]
 ): BuildTask[] => {
   const [latestGitRef] = sortRtl433TagsDesc(gitRefs);
+  const latestAlpineVersion = alpineVersions[0];
 
   const variants = gitRefs.flatMap((gitRef) =>
-    ALPINE_VERSIONS.map((alpineVersion) => {
+    alpineVersions.map((alpineVersion) => {
       const isLatestGitRef = gitRef === latestGitRef;
-      const isLatestBase = alpineVersion === ALPINE_LATEST_VERSION;
+      const isLatestBase = alpineVersion === latestAlpineVersion;
       return {
         gitRef,
         alpineVersion,
@@ -79,6 +72,7 @@ export const createAlpineBuildTasks = (
       }
 
       const gitSha = gitRefShas.get(gitRef) ?? "unknown";
+      const cacheScope = `type=gha,scope=alpine-${alpineVersion}-${gitRef}`;
 
       return {
         name: `${gitRef}-alpine-${alpineVersion}`,
@@ -97,8 +91,8 @@ export const createAlpineBuildTasks = (
           "linux/arm/v6",
           "linux/arm/v7",
         ],
-        cacheFrom: `type=gha,scope=alpine-${alpineVersion}-${gitRef}`,
-        cacheTo: `type=gha,scope=alpine-${alpineVersion}-${gitRef}`,
+        cacheFrom: cacheScope,
+        cacheTo: cacheScope,
       };
     }
   );

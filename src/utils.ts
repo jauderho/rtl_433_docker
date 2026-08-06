@@ -1,9 +1,31 @@
-import { type BuildTask } from "./main.ts";
+import { retry, type RetryOptions } from "@std/async/retry";
 
-export const fetchGitTagNames = async (repo: string) => {
-  const res = await fetch(`https://api.github.com/repos/${repo}/tags`);
-  const tags: { name: string; [key: string]: unknown }[] = await res.json();
-  return tags.map((tag) => tag.name);
+/**
+ * Fetch JSON, throwing on an error response instead of handing back the API's
+ * error body. Retries server errors and 429s; anything else gives up at once,
+ * since retrying a 403 or a 404 only burns more of the request budget.
+ */
+export const fetchJson = async <T>(
+  url: string,
+  init?: RequestInit,
+  retryOptions?: RetryOptions
+): Promise<T> => {
+  const res = await retry(async () => {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(10_000),
+      ...init,
+    });
+    if (response.status === 429 || response.status >= 500) {
+      throw new Error(`GET ${url} failed with HTTP ${response.status}`);
+    }
+    return response;
+  }, retryOptions);
+
+  if (!res.ok) {
+    const body = (await res.text()).slice(0, 200);
+    throw new Error(`GET ${url} failed with HTTP ${res.status}: ${body}`);
+  }
+  return (await res.json()) as T;
 };
 
 export const semUp = (sem: string, dots: number) =>

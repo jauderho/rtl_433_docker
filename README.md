@@ -19,10 +19,12 @@ docker run --device /dev/bus/usb/001/003 hertzg/rtl_433
 
 ## Image Variants
 
-| Variant | Base | Size | SDR Support |
-|---------|------|------|-------------|
-| `alpine` (default) | Alpine Linux | ~3 MB | RTL-SDR |
-| `debian` | Debian | ~50 MB | RTL-SDR + SoapySDR |
+| Variant | Base | Download Size | SDR Support |
+|---------|------|---------------|-------------|
+| `alpine` (default) | Alpine Linux | ~5 MB | RTL-SDR |
+| `debian` | Debian | ~79 MB | RTL-SDR + SoapySDR |
+
+> Sizes are compressed download sizes for `linux/amd64` (measured on `25.12`). On-disk sizes after extraction are larger.
 
 ## Image Tags
 
@@ -269,6 +271,29 @@ Use serial number selection instead of device path ([#14](https://github.com/her
 ```bash
 docker run --device /dev/bus/usb hertzg/rtl_433 -d :YOUR_SERIAL
 ```
+
+## Repo Layout
+
+- `images/alpine/build-context/Dockerfile`, `images/debian/build-context/Dockerfile` — the two image definitions.
+- `src/` — a Deno script that generates the CI build matrix. It runs in CI only and is not part of any image.
+- `.github/workflows/build.yml`, `.github/workflows/build-group.yml` — the build and publish workflows.
+
+Upstream's README links to this repo; see [merbanan/rtl_433#1612](https://github.com/merbanan/rtl_433/issues/1612)
+and [merbanan/rtl_433#3006](https://github.com/merbanan/rtl_433/issues/3006) for background.
+
+### Building Locally
+
+```bash
+docker build \
+  --build-arg rtl433GitVersion=master \
+  -f images/alpine/build-context/Dockerfile \
+  -t rtl_433:local \
+  images/alpine/build-context
+```
+
+`rtl433GitVersion` is any rtl_433 tag or branch. Swap `alpine` for `debian` to build the other
+variant. CI additionally passes `rtl433GitSha`, which labels the image and busts the build cache
+when a branch moves.
 
 ## Links
 
