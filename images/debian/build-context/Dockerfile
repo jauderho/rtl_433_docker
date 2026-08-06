@@ -32,10 +32,6 @@ RUN ls -lah /build/root
 ARG debianVersion=latest
 FROM debian:${debianVersion}
 
-ARG rtl433GitRevision=master
-LABEL maintainer="georgedot@gmail.com" \
-    vcs-ref="${rtl433GitRevision}"
-
 RUN apt-get update && apt-get install -y \
     libusb-1.0-0 \
     librtlsdr0 \
@@ -48,3 +44,17 @@ WORKDIR /root
 COPY --from=builder /build/root/ /
 
 ENTRYPOINT ["/usr/local/bin/rtl_433"]
+
+# Keep the LABEL last. rtl433GitSha changes on every upstream master commit, and
+# BuildKit invalidates the cache from an ARG's first *use* onwards - so keeping
+# the only use down here leaves the apt install above it cached.
+ARG rtl433GitVersion=master
+ARG rtl433GitSha=latest
+LABEL org.opencontainers.image.title="rtl_433" \
+    org.opencontainers.image.description="rtl_433 on Debian - a generic data receiver for ISM band devices using RTL-SDR and SoapySDR" \
+    org.opencontainers.image.authors="hertzg" \
+    org.opencontainers.image.url="https://github.com/hertzg/rtl_433_docker" \
+    org.opencontainers.image.source="https://github.com/hertzg/rtl_433_docker" \
+    org.opencontainers.image.licenses="GPL-2.0-or-later" \
+    org.opencontainers.image.version="${rtl433GitVersion}" \
+    org.opencontainers.image.revision="${rtl433GitSha}"
