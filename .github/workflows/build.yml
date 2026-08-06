@@ -22,6 +22,8 @@ jobs:
           deno-version: 2.x
       - uses: actions/checkout@v7
       - id: config
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: deno run --allow-net --allow-read --allow-write --allow-env src/main.ts
 
   builds:

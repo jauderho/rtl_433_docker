@@ -4,6 +4,7 @@
   },
   "imports": {
     "@actions/core": "npm:@actions/core@^3.0.0",
+    "@std/async": "jsr:@std/async@^1.0.0",
     "@std/cli": "jsr:@std/cli@^1.0.0"
   }
 }
