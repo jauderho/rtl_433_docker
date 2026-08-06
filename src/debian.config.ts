@@ -1,29 +1,17 @@
-import { BuildTask } from "./main.ts";
-import { sortRtl433TagsDesc } from "./utils.ts";
+import type { BuildTask } from "./main.ts";
+import { fetchJson, sortRtl433TagsDesc } from "./utils.ts";
 
-const fetchLastDebianCycleCodenames = async () => {
-  const res = await fetch("https://endoflife.date/api/debian.json");
+/**
+ * The Debian base codenames to build against, newest first. Kept out of module
+ * scope so importing this module performs no network IO.
+ */
+export const fetchDebianVersions = async (): Promise<string[]> => {
+  const cycles = await fetchJson<Array<{ codename: string }>>(
+    "https://endoflife.date/api/debian.json"
+  );
 
-  const cycles = (await res.json()) as Array<{
-    cycle: string;
-    codename: string;
-    releaseDate: string;
-    eol: string;
-    extendedSupport: string;
-    link: string;
-    latest: string;
-    latestReleaseDate: string;
-    lts: boolean;
-  }>;
-
-  return cycles
-    .slice(0, 2)
-    .map((cycles) => cycles.codename.toLocaleLowerCase())
-    .slice(0, 1);
+  return cycles.slice(0, 1).map((cycle) => cycle.codename.toLocaleLowerCase());
 };
-
-const DEBIAN_VERSIONS = await fetchLastDebianCycleCodenames();
-const DEBIAN_LATEST_VERSION = DEBIAN_VERSIONS[0];
 
 const BROKEN_RTLVERSIONS_FOR_DEBIAN_CYCLES = new Map([
   ["bookworm", ["19.08", "18.12"]],
@@ -42,14 +30,16 @@ const generateTags = (baseVersion: string, gitRef: string) => {
 
 export const createDebianBuildTasks = (
   gitRefs: string[],
-  gitRefShas: Map<string, string>
+  gitRefShas: Map<string, string>,
+  debianVersions: string[]
 ): BuildTask[] => {
   const [latestGitRef] = sortRtl433TagsDesc(gitRefs);
+  const latestDebianVersion = debianVersions[0];
 
   const variants = gitRefs.flatMap((gitRef) =>
-    DEBIAN_VERSIONS.map((debianVersion) => {
+    debianVersions.map((debianVersion) => {
       const isLatestGitRef = gitRef === latestGitRef;
-      const isLatestBase = debianVersion === DEBIAN_LATEST_VERSION;
+      const isLatestBase = debianVersion === latestDebianVersion;
       return {
         gitRef,
         debianVersion,
@@ -60,15 +50,11 @@ export const createDebianBuildTasks = (
   );
 
   const tasks: BuildTask[] = variants
-    .filter(({ gitRef, debianVersion }) => {
-      if (BROKEN_RTLVERSIONS_FOR_DEBIAN_CYCLES.has(debianVersion)) {
-        const brokenRefs =
-          BROKEN_RTLVERSIONS_FOR_DEBIAN_CYCLES.get(debianVersion)!;
-        return !brokenRefs.includes(gitRef);
-      }
-
-      return true;
-    })
+    .filter(({ gitRef, debianVersion }) =>
+      !(BROKEN_RTLVERSIONS_FOR_DEBIAN_CYCLES.get(debianVersion) ?? []).includes(
+        gitRef
+      )
+    )
     .map(({ gitRef, debianVersion, isLatestGitRef, isLatestBase }) => {
       const tags = generateTags(debianVersion, gitRef);
 
@@ -85,6 +71,7 @@ export const createDebianBuildTasks = (
       }
 
       const gitSha = gitRefShas.get(gitRef) ?? "unknown";
+      const cacheScope = `type=gha,scope=debian-${debianVersion}-${gitRef}`;
 
       return {
         name: `${gitRef}-debian-${debianVersion}`,
@@ -102,8 +89,8 @@ export const createDebianBuildTasks = (
           "linux/arm64/v8",
           "linux/arm/v7",
         ],
-        cacheFrom: `type=gha,scope=debian-${debianVersion}-${gitRef}`,
-        cacheTo: `type=gha,scope=debian-${debianVersion}-${gitRef}`,
+        cacheFrom: cacheScope,
+        cacheTo: cacheScope,
       };
     });
 

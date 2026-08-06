@@ -1,5 +1,5 @@
-import { createAlpineBuildTasks } from "./alpine.config.ts";
-import { createDebianBuildTasks } from "./debian.config.ts";
+import { createAlpineBuildTasks, fetchAlpineVersions } from "./alpine.config.ts";
+import { createDebianBuildTasks, fetchDebianVersions } from "./debian.config.ts";
 import { setOutput } from "@actions/core";
 import { getGithubRepoTags, getGithubRefCommit } from "./github.ts";
 import {
@@ -7,9 +7,8 @@ import {
   stringifyTagsWithRepos,
   stringifyBuildArgs,
   stringifyPlatforms,
-  crossTagsAndRepos,
+  sortRtl433TagsDesc,
 } from "./utils.ts";
-import { toPlatformPath } from "@actions/core";
 
 export interface BuildTask {
   name: string;
@@ -35,10 +34,11 @@ const MAX_RELEASE_VERSIONS = 3;
 
 const tags: string[] = ["master"];
 tags.push(
-  ...(await getGithubRepoTags("merbanan/rtl_433"))
-    .map((tag) => tag.name)
-    .filter((tag) => /^[0-9\.]*$/i.test(tag))
-    .slice(0, MAX_RELEASE_VERSIONS)
+  // sortRtl433TagsDesc decides which refs are releases, and the same predicate
+  // later decides which one wins `latest` - keep it the single source of truth.
+  ...sortRtl433TagsDesc(
+    (await getGithubRepoTags("merbanan/rtl_433")).map((tag) => tag.name)
+  ).slice(0, MAX_RELEASE_VERSIONS)
 );
 
 // Fetch commit SHAs for each ref to enable proper cache busting
@@ -52,8 +52,13 @@ await Promise.all(
   })
 );
 
-const alpineTasks = createAlpineBuildTasks(tags, gitRefShas);
-const debianTasks = createDebianBuildTasks(tags, gitRefShas);
+const [alpineVersions, debianVersions] = await Promise.all([
+  fetchAlpineVersions(),
+  fetchDebianVersions(),
+]);
+
+const alpineTasks = createAlpineBuildTasks(tags, gitRefShas, alpineVersions);
+const debianTasks = createDebianBuildTasks(tags, gitRefShas, debianVersions);
 
 const tasks = [...alpineTasks, ...debianTasks].sort(
   (a, b) => a.name.localeCompare(b.name) * -1
