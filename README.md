@@ -15,12 +15,16 @@ lsusb | grep RTL
 docker run --device /dev/bus/usb/001/003 hertzg/rtl_433
 ```
 
+> **Tip:** Device paths can change on reboot. For stable, persistent identification, use [serial number selection](#stable-device-selection) instead.
+
 ## Image Variants
 
-| Variant | Base | Size | SDR Support |
-|---------|------|------|-------------|
-| `alpine` (default) | Alpine Linux | ~3 MB | RTL-SDR |
-| `debian` | Debian | ~50 MB | RTL-SDR + SoapySDR |
+| Variant | Base | Download Size | SDR Support |
+|---------|------|---------------|-------------|
+| `alpine` (default) | Alpine Linux | ~5 MB | RTL-SDR |
+| `debian` | Debian | ~79 MB | RTL-SDR + SoapySDR |
+
+> Sizes are compressed download sizes for `linux/amd64` (measured on `25.12`). On-disk sizes after extraction are larger.
 
 ## Image Tags
 
@@ -63,7 +67,7 @@ Bus 001 Device 003: ID 0bda:2838 Realtek Semiconductor Corp. RTL2838 DVB-T
 
 The device path is `/dev/bus/usb/<bus>/<device>` → `/dev/bus/usb/001/003`
 
-> **Note:** Device paths may change on reboot or replug. See [#14](https://github.com/hertzg/rtl_433_docker/issues/14) for details. For persistent identification, use [serial numbers](#multiple-devices).
+> **Note:** Device paths may change on reboot or replug. See [#14](https://github.com/hertzg/rtl_433_docker/issues/14) for details. For persistent identification, use [serial numbers](#stable-device-selection).
 
 ### Basic Usage
 
@@ -81,24 +85,33 @@ docker run --device /dev/bus/usb/001/003 hertzg/rtl_433 -F json     # JSON outpu
 docker run --device /dev/bus/usb/001/003 hertzg/rtl_433 -R 40 -R 41 # specific decoders
 ```
 
-### Multiple Devices
+### Stable Device Selection
 
-When using multiple RTL-SDR dongles, select by serial number ([#45](https://github.com/hertzg/rtl_433_docker/discussions/45), [#82](https://github.com/hertzg/rtl_433_docker/discussions/82)):
+Device paths like `/dev/bus/usb/001/003` can change on reboot or replug. For reliable, persistent device identification, use serial number selection:
 
 ```bash
-# Find serial numbers
-lsusb -v 2>/dev/null | grep -A 5 "RTL2838" | grep iSerial
-
 # Pass entire USB bus and select by serial
 docker run --device /dev/bus/usb hertzg/rtl_433 -d :00000001
 ```
 
-**Setting unique serial numbers:**
+This approach:
+- Works reliably across reboots
+- Handles device re-enumeration automatically
+- Is required for multiple RTL-SDR dongles
+
+**Finding your serial number:**
 
 ```bash
-sudo apt install rtl-sdr
+lsusb -v -d 0bda:2838 2>/dev/null | grep iSerial
+```
+
+**Setting a unique serial number:**
+
+```bash
 rtl_eeprom -s 00000001  # Connect one device at a time
 ```
+
+See [#14](https://github.com/hertzg/rtl_433_docker/issues/14), [#45](https://github.com/hertzg/rtl_433_docker/discussions/45), [#82](https://github.com/hertzg/rtl_433_docker/discussions/82) for background.
 
 ### Custom Config File
 
@@ -181,14 +194,15 @@ services:
     image: hertzg/rtl_433:latest
     restart: unless-stopped
     devices:
-      - /dev/bus/usb/001/003
+      - /dev/bus/usb  # Pass entire bus for stable device discovery
     environment:
       - TZ=Europe/London
-    command:
-      - -M time:unix:usec:utc
-      - -M protocol
-      - -F mqtt://mosquitto:1883,retain=1
-      - -F influx://influxdb:8086/write?db=rtl433
+    command: >-
+      -d :00000001
+      -M time:unix:usec:utc
+      -M protocol
+      -F mqtt://mosquitto:1883,retain=1
+      -F influx://influxdb:8086/write?db=rtl433
 
   mosquitto:
     image: eclipse-mosquitto:2
@@ -197,17 +211,18 @@ services:
     image: influxdb:1.8
 ```
 
-**With serial number selection:**
+> **Note:** Using `-d :SERIAL` with `/dev/bus/usb` is more reliable than specifying a device path like `/dev/bus/usb/001/003`, which can change on reboot.
+
+**With specific device path (less stable):**
 
 ```yaml
 services:
   rtl433:
     image: hertzg/rtl_433:latest
     devices:
-      - /dev/bus/usb
-    command:
-      - -d :00000001
-      - -F mqtt://mosquitto:1883
+      - /dev/bus/usb/001/003  # May change on reboot
+    command: >-
+      -F mqtt://mosquitto:1883
 ```
 
 ## Supported Platforms
@@ -256,6 +271,29 @@ Use serial number selection instead of device path ([#14](https://github.com/her
 ```bash
 docker run --device /dev/bus/usb hertzg/rtl_433 -d :YOUR_SERIAL
 ```
+
+## Repo Layout
+
+- `images/alpine/build-context/Dockerfile`, `images/debian/build-context/Dockerfile` — the two image definitions.
+- `src/` — a Deno script that generates the CI build matrix. It runs in CI only and is not part of any image.
+- `.github/workflows/build.yml`, `.github/workflows/build-group.yml` — the build and publish workflows.
+
+Upstream's README links to this repo; see [merbanan/rtl_433#1612](https://github.com/merbanan/rtl_433/issues/1612)
+and [merbanan/rtl_433#3006](https://github.com/merbanan/rtl_433/issues/3006) for background.
+
+### Building Locally
+
+```bash
+docker build \
+  --build-arg rtl433GitVersion=master \
+  -f images/alpine/build-context/Dockerfile \
+  -t rtl_433:local \
+  images/alpine/build-context
+```
+
+`rtl433GitVersion` is any rtl_433 tag or branch. Swap `alpine` for `debian` to build the other
+variant. CI additionally passes `rtl433GitSha`, which labels the image and busts the build cache
+when a branch moves.
 
 ## Links
 

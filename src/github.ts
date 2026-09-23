@@ -1,3 +1,12 @@
+import { fetchJson } from "./utils.ts";
+
+// Unauthenticated calls get 60 requests/hour per IP, which the nightly build
+// has repeatedly exhausted. A token lifts this to 1000+.
+const githubHeaders = (): HeadersInit => {
+  const token = Deno.env.get("GITHUB_TOKEN");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 export interface GithubRepoTag {
   name: string;
   commit: {
@@ -9,24 +18,21 @@ export interface GithubRepoTag {
   node_id: string;
 }
 
-export const getGithubRepoTags = async (
-  repo: string,
-): Promise<GithubRepoTag[]> => {
-  const res = await fetch(`https://api.github.com/repos/${repo}/tags`);
-  const tags = await res.json();
-  return tags;
-};
+export const getGithubRepoTags = (repo: string): Promise<GithubRepoTag[]> =>
+  fetchJson<GithubRepoTag[]>(`https://api.github.com/repos/${repo}/tags`, {
+    headers: githubHeaders(),
+  });
 
 export interface GithubCommit {
   sha: string;
   url: string;
 }
 
-export const getGithubRefCommit = async (
+export const getGithubRefCommit = (
   repo: string,
   ref: string,
-): Promise<GithubCommit> => {
-  const res = await fetch(`https://api.github.com/repos/${repo}/commits/${ref}`);
-  const commit = await res.json();
-  return { sha: commit.sha, url: commit.url };
-};
+): Promise<GithubCommit> =>
+  fetchJson<GithubCommit>(
+    `https://api.github.com/repos/${repo}/commits/${ref}`,
+    { headers: githubHeaders() },
+  );
